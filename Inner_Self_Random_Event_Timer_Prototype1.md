@@ -1,21 +1,20 @@
-# Inner Self + Random Event Timer Prototype
+# Inner Self + Random Event Timer v0.1
 
-This version combines **Inner Self v1.0.2**, its bundled **Auto-Cards v1.1.3** implementation, and the Random Event Timer. It contains no Narrative Pathfinder mode logic.
+This version combines Inner Self v1.0.2, its bundled Auto-Cards v1.1.3 implementation, and the Random Event Timer. It does not include Narrative Pathfinder mode logic.
 
 ## Install
 
-In the AI Dungeon scenario's scripting editor, replace the contents of the matching tabs with the files from the ZIP package:
+Replace the contents of the Library, Input, Context, and Output tabs with the corresponding blocks below. Use all four together. The merged hooks retain Inner Self behavior and coordinate the timer.
 
-- `Library.js` → Library
-- `Input.js` → Input
-- `Context.js` → Context
-- `Output.js` → Output
+## Automatic control card
 
-Use all four files together. The hooks preserve Inner Self's normal behavior and coordinate the timer. Keep the original Inner Self and Auto-Cards attribution and license notices in `Library.js`.
+On the first Input hook, the script looks for a Story Card with Type `Random Event Control`. If it does not find one, it creates the card automatically with **Frequency: Rare** and the sample event below. If a card already exists, its settings are preserved. Edit the card's Entry to change the interval or event.
 
-## Configure the event
+The default sample event is: Dr. Henrietta Jekyll transforms into Ms. Edwina Hyde.
 
-Create a Story Card with **Type** `Random Event Control`. Put this in its Entry:
+## Configure frequency and event
+
+The control card's Entry uses this format:
 
 ```text
 Frequency: Rare
@@ -33,26 +32,21 @@ Preset intervals (random AI Dungeon actions between events; bounds are inclusive
 - Custom: Fill in your own numbers above and set Frequency to Custom.
 ```
 
-Replace the text under `Triggered Event:` with any event instruction you want the AI to enact. It can span multiple lines. Keep `Notes:` after the event; the timer excludes the Notes section from the event. If the event text is empty, the timer is disabled.
-
-To include a Story Card in the event prompt, mention one of its trigger keys in the event instruction. Matching uses card keys, so broad keys may pull in extra cards.
+Replace the instructions under `Triggered Event:` with any event you want the AI to enact. The event may span multiple lines. Keep `Notes:` after the event; Notes are excluded from the event instruction. If the event is empty, the timer is disabled. To include a Story Card in the prompt, mention one of its trigger keys in the event instruction; broad keys may match extra cards.
 
 ## Timer behavior
 
-- The default `Rare` interval is a random 20–40 AI Dungeon actions, inclusive.
-- The first interval starts on the first action with a non-empty event configured.
-- Continue actions count toward the interval.
-- When the timer is due, the event instruction and any key-matched Story Card entries are added to Context. After the AI responds, the timer rolls a new interval.
-- If the interval range changes while the timer is waiting, a fresh interval starts from the current action count.
-- The script asks the AI to enact the event naturally; the model's response is not guaranteed.
+- Presets use inclusive random action counts: Frequent 6–12, Normal 12–20, Rare 20–40.
+- Continue actions count.
+- When due, the event instruction and any key-matched Story Card entries are added to Context. After the AI responds, a new interval is rolled.
+- Changing the interval range while waiting starts a fresh interval from the current action count.
+- The script asks the AI to enact the event naturally; model compliance is not guaranteed.
 
-## Source and attribution
-
-The Inner Self v1.0.2 Library source was taken from the supplied `library (3).js`. Its original attribution and license notices, including the bundled Auto-Cards attribution, are retained in `Library.js`.
+The Inner Self source and its original Inner Self and Auto-Cards attribution and license notices are retained in the merged Library.
 
 ## Copy/paste script tabs
 
-Paste each complete block into the matching AI Dungeon scripting tab. The Library block is the full merged Inner Self + bundled Auto-Cards + Random Event Timer source.
+Paste each complete block into its matching AI Dungeon scripting tab.
 
 ### Library
 
@@ -8860,6 +8854,40 @@ globalThis.InnerSelfAdapter = {
 };
 
 globalThis.RandomEventTimer = {
+  ensureControlCard() {
+    const cards = Array.isArray(globalThis.storyCards) ? globalThis.storyCards : [];
+    let card = cards.find(item => String(item.type || "").trim().toLowerCase() === "random event control");
+    if (!card) {
+      card = cards.find(item => String(item.title || "").trim().toLowerCase() === "random event control");
+      if (card) card.type = "Random Event Control";
+    }
+    if (card || typeof addStoryCard !== "function") return card || null;
+
+    const entry = [
+      "Frequency: Rare",
+      "CustomMin: 6",
+      "CustomMax: 12",
+      "Triggered Event:",
+      "On the next scene, Dr. Henrietta Jekyll transforms into Ms. Edwina Hyde. Show the change through the characters' actions and reactions.",
+      "Notes:",
+      "The timer waits the selected random interval, then asks the AI to enact the Triggered Event. Continue actions count. Edit Frequency to change the preset; edit CustomMin and CustomMax for a custom interval. To use those numbers, set Frequency to Custom. Replace the Triggered Event text to change the event. To include another Story Card, mention one of its trigger keys in the event instructions.",
+      "",
+      "Preset intervals (random AI Dungeon actions between events; bounds are inclusive):",
+      "- Frequent: 6-12 actions; shortest waits.",
+      "- Normal: 12-20 actions; medium waits.",
+      "- Rare: 20-40 actions; longest waits (default).",
+      "- Custom: Fill in your own numbers above and set Frequency to Custom."
+    ].join("\n");
+
+    try {
+      addStoryCard("", entry, "Random Event Control", "Random Event Control", "Automatically created by the Random Event Timer.");
+    } catch (error) {
+      if (typeof log === "function") log(`Random Event Timer could not create its control card: ${error.message}`);
+      return null;
+    }
+    return cards.find(item => String(item.type || "").trim().toLowerCase() === "random event control") || null;
+  },
+
   settings() {
     const cards = Array.isArray(globalThis.storyCards) ? globalThis.storyCards : [];
     const card = cards.find(item => String(item.type || "").trim().toLowerCase() === "random event control");
@@ -8894,6 +8922,7 @@ globalThis.RandomEventTimer = {
   },
 
   beforeInput() {
+    this.ensureControlCard();
     const config = this.settings();
     const count = Number(globalThis.info && globalThis.info.actionCount) || 0;
     if (!config.event) {
