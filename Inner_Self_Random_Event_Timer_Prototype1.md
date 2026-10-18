@@ -1,4 +1,4 @@
-# Inner Self + Random Event Timer v0.1
+# Inner Self + Random Event Timer Prototype
 
 This version combines **Inner Self v1.0.2**, its bundled **Auto-Cards v1.1.3** implementation, and the Random Event Timer. It contains no Narrative Pathfinder mode logic.
 
